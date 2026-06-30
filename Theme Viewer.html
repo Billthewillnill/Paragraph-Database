@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FolderFlow Workspace</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (Production versions for speed) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel standalone for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Configuration to stop Babel from using blocked 'import' statements -->
+    <script>
+        Babel.registerPreset('react-classic-safe', {
+            presets: [
+                [Babel.availablePresets.react, { runtime: 'classic' }]
+            ]
+        });
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 m-0 p-0 overflow-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react-classic-safe">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // --- Safe ID Generator for Local Files ---
+        const generateId = () => {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                try { return crypto.randomUUID(); } catch (e) {}
+            }
+            return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9);
+        };
+
+        // --- Custom Lightweight SVG Icons ---
+        const FolderIcon = ({ className = "w-5 h-5" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+        );
+
+        const FileTextIcon = ({ className = "w-5 h-5" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        );
+
+        const TrashIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        );
+
+        const PlusIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        );
+
+        const CheckIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        );
+
+        const PasteIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+        );
+
+        const CopyIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+          </svg>
+        );
+
+        const UndoIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+        );
+
+        const RedoIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m-6-6l-6-6" />
+          </svg>
+        );
+
+        const InfoIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+
+        const OverviewIcon = ({ className = "w-5 h-5" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        );
+
+        const ChartIcon = ({ className = "w-6 h-6" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+          </svg>
+        );
+
+        const LockIcon = ({ className = "w-4 h-4" }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        );
+
+        // Helper to format logs cleanly like: YYYY/MM/DD At HH:MM (+x%)
+        const formatLogDate = (ts, delta) => {
+            const d = new Date(ts);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            return `${yyyy}/${mm}/${dd} At ${hh}:${min} (+${delta}%)`;
+        };
+
+        // --- Helper functions for mapping Text Ranges & Style tags dynamically ---
+        function parseHtmlToStyles(html) {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html || '', 'text/html');
+          const chars = [];
+          const styles = [];
+          
+          function walk(node, currentStyle) {
+            if (node.nodeType === Node.TEXT_NODE) {
+              const text = node.textContent;
+              for (let i = 0; i < text.length; i++) {
+                chars.push(text[i]);
+                styles.push(currentStyle);
+              }
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              let nextStyle = currentStyle;
+              if (node.className && node.className.includes('bg-red-200')) {
+                nextStyle = 'red';
+              } else if (node.className && node.className.includes('bg-green-200')) {
+                nextStyle = 'green';
+              }
+              for (let child of node.childNodes) {
+                walk(child, nextStyle);
+              }
+            }
+          }
+          walk(doc.body, 'neutral');
+          return { chars, styles };
+        }
+
+        function rebuildHtml(chars, styles) {
+          let html = "";
+          let currentStyle = 'neutral';
+          
+          for (let i = 0; i < chars.length; i++) {
+            const char = chars[i];
+            const escapedChar = char
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#039;");
+              
+            const style = styles[i];
+            if (style !== currentStyle) {
+              if (currentStyle !== 'neutral') {
+                html += "</span>";
+              }
+              if (style === 'red') {
+                html += '<span class="bg-red-200 text-red-900 rounded-sm px-0">';
+              } else if (style === 'green') {
+                html += '<span class="bg-green-200 text-green-900 rounded-sm px-0">';
+              }
+              currentStyle = style;
+            }
+            html += escapedChar;
+          }
+          if (currentStyle !== 'neutral') {
+            html += "</span>";
+          }
+          return html;
+        }
+
+        // Transforms visual HTML spans into structured string tags (%g1, %r1, etc.)
+        const htmlToTextWithTags = (html) => {
+            let gCount = 1;
+            let rCount = 1;
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html || '', 'text/html');
+            
+            let result = "";
+            function walk(node, currentStyle) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    result += node.textContent;
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    let nextStyle = currentStyle;
+                    let tagStart = "";
+                    let tagEnd = "";
+                    if (node.className && node.className.includes('bg-green-200')) {
+                        tagStart = `%g${gCount}`;
+                        tagEnd = `%g${gCount}`;
+                        gCount++;
+                        nextStyle = 'green';
+                    } else if (node.className && node.className.includes('bg-red-200')) {
+                        tagStart = `%r${rCount}`;
+                        tagEnd = `%r${rCount}`;
+                        rCount++;
+                        nextStyle = 'red';
+                    }
+                    result += tagStart;
+                    for (let child of node.childNodes) {
+                        walk(child, nextStyle);
+                    }
+                    result += tagEnd;
+                }
+            }
+            walk(doc.body, 'neutral');
+            return result;
+        };
+
+        // Processing %g and %r highlights
+        const applyShortcuts = (txt) => {
+            if (!txt) return "";
+            return txt.replace(/%g\d*([\s\S]*?)%g\d*/g, '<span class="bg-green-200 text-green-900 rounded-sm px-0">$1</span>')
+                      .replace(/%r\d*([\s\S]*?)%r\d*/g, '<span class="bg-red-200 text-red-900 rounded-sm px-0">$1</span>');
+        };
+
+        const calcPct = (htmlText) => {
+            if (!htmlText) return 0;
+            const { styles } = parseHtmlToStyles(htmlText);
+            const totalChars = styles.length;
+            const greenChars = styles.filter(s => s === 'green').length;
+            return totalChars > 0 ? Math.round((greenChars / totalChars) * 100) : 0;
+        };
+
+        // Time gate check (Spaced Repetition logic helper)
+        const isStudyGated = (para) => {
+          if (!para.lastStudied) return false; 
+          const elapsed = Date.now() - para.lastStudied;
+          const currentCount = para.studyCount || 0;
+          
+          if (currentCount === 1) return elapsed < (7.5 * 24 * 60 * 60 * 1000); 
+          if (currentCount === 2) return elapsed < (7.5 * 24 * 60 * 60 * 1000); 
+          if (currentCount === 3) return elapsed < (15 * 24 * 60 * 60 * 1000); 
+          if (currentCount >= 4) return elapsed < (30 * 24 * 60 * 60 * 1000); 
+          return false;
+        };
+
+        const getCooldownRemainingStr = (para) => {
+          if (!para.lastStudied) return null;
+          const elapsed = Date.now() - para.lastStudied;
+          const currentCount = para.studyCount || 0;
+          let cooldown = 0;
+          if (currentCount === 1 || currentCount === 2) cooldown = 7.5 * 24 * 60 * 60 * 1000;
+          else if (currentCount === 3) cooldown = 15 * 24 * 60 * 60 * 1000;
+          else if (currentCount >= 4) cooldown = 30 * 24 * 60 * 60 * 1000;
+          
+          const remaining = cooldown - elapsed;
+          if (remaining <= 0) return null;
+
+          const d = Math.floor(remaining / (24 * 60 * 60 * 1000));
+          const h = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+          if (d > 0) return `${d}d ${h}h remaining`;
+          const m = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+          return `${h}h ${m}m remaining`;
+        };
+
+        // --- Core Application Logic ---
+        function App() {
+          const [docState, setDocState] = useState(() => {
+            try {
+              const savedF = localStorage.getItem('env_folders');
+              const savedP = localStorage.getItem('env_paragraphs');
+              const savedStaticStats = localStorage.getItem('env_static_percentages');
+              const savedTodayLogs = localStorage.getItem('env_today_percentage_logs');
+              
+              return {
+                folders: savedF ? JSON.parse(savedF) : [
+                  { id: '1', name: 'Personal Projects', rating: 0 },
+                  { id: '2', name: 'Work Research', rating: 50 },
+                  { id: '3', name: 'Drafts', rating: 100 }
+                ],
+                paragraphs: savedP ? JSON.parse(savedP) : [
+                  { id: '101', folderId: '1', text: 'This is an initial paragraph inside Personal Projects. You can edit this text directly, delete it, or add new paragraphs to organize your thoughts.', textBack: '', createdAt: Date.now(), archived: false, studyCount: 0, lastStudied: null },
+                  { id: '102', folderId: '3', text: 'This paragraph lives inside the Drafts folder!', textBack: '', createdAt: Date.now() + 1, archived: false, studyCount: 0, lastStudied: null }
+                ],
+                // Tracking static week/month/allTime totals + Undo-aware logs for Today
+                staticStats: savedStaticStats ? JSON.parse(savedStaticStats) : { week: 0, month: 0, allTime: 0 },
+                todayPercentageLogs: savedTodayLogs ? JSON.parse(savedTodayLogs) : []
+              };
+            } catch (e) {
+              return { 
+                folders: [], 
+                paragraphs: [], 
+                staticStats: { week: 0, month: 0, allTime: 0 }, 
+                todayPercentageLogs: [] 
+              };
+            }
+          });
+
+          const { folders, paragraphs, staticStats, todayPercentageLogs } = docState;
+
+          const [selectedFolderId, setSelectedFolderId] = useState('1'); 
+          const [lastActiveFolderId, setLastActiveFolderId] = useState('1'); 
+          const [newFolderName, setNewFolderName] = useState('');
+          
+          // Paragraph Adding State
+          const [isAddingBack, setIsAddingBack] = useState(false);
+          const [newParagraphText, setNewParagraphText] = useState('');
+          const [newParagraphTextBack, setNewParagraphTextBack] = useState('');
+          
+          // Paragraph Editing State
+          const [editingParagraphId, setEditingParagraphId] = useState(null);
+          const [editingSide, setEditingSide] = useState('front'); // 'front' | 'back'
+          const [editingText, setEditingText] = useState('');
+          const [editingTextBack, setEditingTextBack] = useState('');
+          
+          const [flippedParas, setFlippedParas] = useState(new Set()); // IDs of paras showing 'back' side
+          
+          const [searchQuery, setSearchQuery] = useState('');
+          const [activeTab, setActiveTab] = useState('editor'); // 'editor' | 'readable'
+          const [copySuccess, setCopySuccess] = useState(false);
+          const [showArchived, setShowArchived] = useState(false);
+          const [showPercentages, setShowPercentages] = useState(true);
+          const [mergeTargetId, setMergeTargetId] = useState('');
+          
+          const [editingRatingFolderId, setEditingRatingFolderId] = useState(null);
+          const [tempRatingVal, setTempRatingFolderVal] = useState('');
+          const [editingFolderId, setEditingFolderId] = useState(null);
+          const [tempFolderName, setTempFolderName] = useState('');
+
+          const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, type: '', targetId: null });
+          const [selectionMenu, setSelectionMenu] = useState({ visible: false, x: 0, y: 0, paraId: null, start: 0, end: 0, showRemove: false, styleContext: null });
+          const [readableText, setReadableText] = useState("");
+          const [excludedOverviewFolders, setExcludedOverviewFolders] = useState(new Set()); 
+
+          const [statModal, setStatModal] = useState({ visible: false, title: '', paras: [] });
+          const [highlightParaId, setHighlightParaId] = useState(null);
+          const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+          // History Stacks
+          const [undoStack, setUndoStack] = useState([]);
+          const [redoStack, setRedoStack] = useState([]);
+          const lastHistorySaveTime = useRef(0);
+
+          const textAreaRef = useRef(null);
+          const sidebarListRef = useRef(null);
+          const headerSliderRef = useRef(null);
+
+          // Generate backup output text, including percentage tracking and formatted log zones
+          const generateReadableText = (fData, pData, stats, logs) => {
+            if (fData.length === 0) return "=== WORKSPACE ENVIRONMENT BACKUP ===\n\nNo folders found.";
+            let output = "=== WORKSPACE ENVIRONMENT BACKUP ===\n\n";
+            fData.forEach(folder => {
+              output += `# ${folder.name} (${folder.rating || 0}%)\n`;
+              const folderParas = pData.filter(p => p.folderId === folder.id);
+              if (folderParas.length > 0) {
+                folderParas.forEach(p => {
+                  const status = p.archived ? '[ARCHIVED] ' : '';
+                  const dateTag = new Date(p.createdAt).toLocaleDateString();
+                  let meta = `[Created: ${dateTag}]`;
+                  if (p.lastStudied) meta += ` [Studied: ${new Date(p.lastStudied).toLocaleDateString()}] [Count: ${p.studyCount || 0}]`;
+                  
+                  let frontText = htmlToTextWithTags(p.text).replace(/\n/g, '\n    ');
+                  let backTag = p.textBack ? ` [BACK: ${htmlToTextWithTags(p.textBack).replace(/\n/g, '\\n')}]` : '';
+                  output += `  • ${status}${frontText}${backTag} ${meta}\n`;
+                });
+              } else {
+                output += `  (Empty folder)\n`;
+              }
+              output += "\n";
+            });
+
+            output += "\n=== PERCENTAGE TRACKING ===\n";
+            output += `Week Total Points: ${stats?.week || 0}\n`;
+            output += `Month Total Points: ${stats?.month || 0}\n`;
+            output += `AllTime Total Points: ${stats?.allTime || 0}\n\n`;
+            output += `[Today Logs]\n`;
+            if (logs && logs.length > 0) {
+              logs.forEach(log => {
+                output += `  • ${formatLogDate(log.timestamp, log.delta)}\n`;
+              });
+            } else {
+              output += `  (No logs for today)\n`;
+            }
+
+            return output.trim();
+          };
+
+          const parseTextToState = (text, currentState) => {
+            const newFolders = [];
+            const newParagraphs = [];
+            let parsedStats = { week: 0, month: 0, allTime: 0 };
+            let parsedTodayLogs = [];
+
+            // Split file structure by tracking block
+            const parts = text.split("=== PERCENTAGE TRACKING ===");
+            const mainContent = parts[0] || "";
+            const trackingContent = parts[1] || "";
+
+            // 1. Parse Folders and Paragraphs
+            const folderBlocks = mainContent.split(/(?=(?:^|\n)#\s)/);
+            
+            folderBlocks.forEach(block => {
+              if (!block.trim().startsWith('#')) return; 
+              
+              const lines = block.trim().split('\n');
+              const headerLine = lines[0].replace(/^#\s*/, '').trim();
+              const match = headerLine.match(/^(.*?)(?:\s+\((\d+)%\))?$/);
+              if (!match) return;
+              
+              const folderName = match[1].trim();
+              const existingFolder = currentState.folders.find(f => f.name === folderName);
+              const folderId = existingFolder ? existingFolder.id : generateId();
+              
+              newFolders.push({ id: folderId, name: folderName, rating: parseInt(match[2]) || 0 });
+              
+              let currentParaTextLines = [];
+              let archived = false;
+              
+              const finalizePara = () => {
+                if (currentParaTextLines.length > 0) {
+                  let fullText = currentParaTextLines.join('\n').trim();
+                  
+                  let createdAt = Date.now();
+                  let lastStudied = null;
+                  let studyCount = 0;
+                  let textBack = '';
+                  
+                  // Extract right to left
+                  const countMatch = fullText.match(/\s+\[Count:\s*(\d+)\]$/);
+                  if (countMatch) {
+                      studyCount = parseInt(countMatch[1]) || 0;
+                      fullText = fullText.substring(0, countMatch.index).trim();
+                  }
+                  
+                  const studiedMatch = fullText.match(/\s+\[Studied:\s*(.*?)\]$/);
+                  if (studiedMatch) {
+                      const parsedD = new Date(studiedMatch[1]).getTime();
+                      if (!isNaN(parsedD)) lastStudied = parsedD;
+                      fullText = fullText.substring(0, studiedMatch.index).trim();
+                  }
+                  
+                  const dateMatch = fullText.match(/\s+\[Created:\s*(.*?)\]$/);
+                  if (dateMatch) {
+                    const parsedDate = new Date(dateMatch[1]).getTime();
+                    if (!isNaN(parsedDate)) createdAt = parsedDate;
+                    fullText = fullText.substring(0, dateMatch.index).trim();
+                  }
+                  
+                  const backMatch = fullText.match(/\s+\[BACK:\s*(.*?)\]$/);
+                  if (backMatch) {
+                    textBack = applyShortcuts(backMatch[1].replace(/\\n/g, '\n').trim());
+                    fullText = fullText.substring(0, backMatch.index).trim();
+                  }
+
+                  const existingPara = currentState.paragraphs.find(p => p.createdAt === createdAt && p.folderId === folderId);
+                  const paraId = existingPara ? existingPara.id : generateId();
+
+                  newParagraphs.push({ 
+                      id: paraId, 
+                      folderId: folderId, 
+                      text: applyShortcuts(fullText), 
+                      textBack, 
+                      createdAt, 
+                      archived, 
+                      studyCount, 
+                      lastStudied 
+                  });
+                  currentParaTextLines = [];
+                  archived = false;
+                }
+              };
+              
+              for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.match(/^\s*•\s*/)) {
+                  finalizePara();
+                  let pText = line.replace(/^\s*•\s*/, '').trimEnd();
+                  if (pText.startsWith('[ARCHIVED] ')) {
+                    archived = true;
+                    pText = pText.substring(11);
+                  }
+                  currentParaTextLines.push(pText);
+                } else if (currentParaTextLines.length > 0) {
+                  if (line.trim() !== '') {
+                      currentParaTextLines.push(line.replace(/^\s*/, '').trimEnd());
+                  }
+                }
+              }
+              finalizePara();
+            });
+
+            // 2. Parse Percentage Tracking metrics with new timestamp parser regex
+            if (trackingContent.trim()) {
+              const lines = trackingContent.split("\n");
+              lines.forEach(line => {
+                const weekMatch = line.match(/Week Total Points:\s*(\d+)/i);
+                if (weekMatch) parsedStats.week = parseInt(weekMatch[1]) || 0;
+
+                const monthMatch = line.match(/Month Total Points:\s*(\d+)/i);
+                if (monthMatch) parsedStats.month = parseInt(monthMatch[1]) || 0;
+
+                const allTimeMatch = line.match(/AllTime Total Points:\s*(\d+)/i);
+                if (allTimeMatch) parsedStats.allTime = parseInt(allTimeMatch[1]) || 0;
+
+                // Match format: YYYY/MM/DD At HH:MM (+x%)
+                const logMatch = line.match(/^\s*•\s*(\d{4})\/(\d{2})\/(\d{2})\s+At\s+(\d{2}):(\d{2})\s+\((\+|-)?(\d+)%\)/i);
+                if (logMatch) {
+                  const [_, yyyy, mm, dd, hh, min, sign, deltaStr] = logMatch;
+                  const timestamp = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min)).getTime();
+                  const delta = parseInt(deltaStr) || 0;
+                  if (!isNaN(timestamp)) {
+                    parsedTodayLogs.push({ timestamp, delta });
+                  }
+                }
+              });
+            } else {
+              parsedStats = currentState.staticStats || { week: 0, month: 0, allTime: 0 };
+              parsedTodayLogs = currentState.todayPercentageLogs || [];
+            }
+
+            return { folders: newFolders, paragraphs: newParagraphs, staticStats: parsedStats, todayPercentageLogs: parsedTodayLogs };
+          };
+
+          // Integrated State Modifier with Undo/Redo tracking for stats
+          const updateDocState = (newFolders, newParagraphs, customStats = null, customLogs = null, isContinuous = false) => {
+            const now = Date.now();
+            const nextStats = customStats || docState.staticStats;
+            const nextLogs = customLogs || docState.todayPercentageLogs;
+
+            const nextFullState = { 
+              folders: newFolders, 
+              paragraphs: newParagraphs, 
+              staticStats: nextStats, 
+              todayPercentageLogs: nextLogs 
+            };
+
+            if (isContinuous && (now - lastHistorySaveTime.current < 1000)) {
+                setDocState(nextFullState);
+            } else {
+                setUndoStack(prev => [...prev, docState]);
+                setRedoStack([]); 
+                setDocState(nextFullState);
+                lastHistorySaveTime.current = now;
+            }
+          };
+
+          const undo = useCallback(() => {
+            if (undoStack.length === 0) return;
+            const previousState = undoStack[undoStack.length - 1];
+            setRedoStack(prev => [...prev, docState]);
+            setDocState(previousState);
+            setUndoStack(prev => prev.slice(0, -1));
+          }, [docState, undoStack]);
+
+          const redo = useCallback(() => {
+            if (redoStack.length === 0) return;
+            const nextState = redoStack[redoStack.length - 1];
+            setUndoStack(prev => [...prev, docState]);
+            setDocState(nextState);
+            setRedoStack(prev => prev.slice(0, -1));
+          }, [docState, redoStack]);
+
+          // App Data Text Change Sync (Blur)
+          const handleReadableTextBlur = () => {
+            try {
+              const { folders: parsedF, paragraphs: parsedP, staticStats: parsedS, todayPercentageLogs: parsedTL } = parseTextToState(readableText, docState);
+              if (parsedF.length > 0 || parsedP.length > 0) {
+                updateDocState(parsedF, parsedP, parsedS, parsedTL);
+              }
+            } catch (e) { 
+              console.error("Text parsing failed, ignoring changes."); 
+            }
+          };
+
+          const switchTab = (tabName) => {
+              if (activeTab === 'readable' && tabName !== 'readable') {
+                  handleReadableTextBlur();
+              }
+              setActiveTab(tabName);
+          };
+
+          // Keyboard Shortcuts
+          useEffect(() => {
+            const handleKeyDown = (e) => {
+              if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+              if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+              if (e.key === 'Tab') {
+                const target = e.target;
+                const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+                if (!isInput) {
+                    e.preventDefault();
+                    setSelectedFolderId(prev => prev === 'overview' ? (lastActiveFolderId || '1') : 'overview');
+                }
+              }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+          }, [undo, redo, selectedFolderId, lastActiveFolderId]);
+
+          // Keep LocalStorage Sync
+          useEffect(() => {
+            localStorage.setItem('env_folders', JSON.stringify(folders));
+            localStorage.setItem('env_paragraphs', JSON.stringify(paragraphs));
+            localStorage.setItem('env_static_percentages', JSON.stringify(staticStats));
+            localStorage.setItem('env_today_percentage_logs', JSON.stringify(todayPercentageLogs));
+          }, [folders, paragraphs, staticStats, todayPercentageLogs]);
+          
+          // Force UI to sync when Undo/Redo happens in App Data Tab
+          useEffect(() => {
+            if (activeTab === 'readable') {
+              setReadableText(generateReadableText(folders, paragraphs, staticStats, todayPercentageLogs));
+            }
+          }, [folders, paragraphs, staticStats, todayPercentageLogs, activeTab]);
+
+          // Scroll to highlighted paragraph
+          useEffect(() => {
+            if (highlightParaId && selectedFolderId !== 'overview' && activeTab === 'editor') {
+              const el = document.getElementById(`para-container-${highlightParaId}`);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const timer = setTimeout(() => setHighlightParaId(null), 1500);
+                return () => clearTimeout(timer);
+              }
+            }
+          }, [highlightParaId, selectedFolderId, activeTab]);
+
+          // Global Click Listeners for Context & Floating Menus
+          useEffect(() => {
+            const handleWindowClick = (e) => {
+                setContextMenu(prev => ({ ...prev, visible: false }));
+                if (!e.target.closest('#selection-toolbar')) {
+                    const sel = window.getSelection();
+                    if (!sel || sel.isCollapsed) {
+                      setSelectionMenu(prev => ({...prev, visible: false}));
+                    }
+                }
+            };
+            window.addEventListener('click', handleWindowClick);
+            return () => window.removeEventListener('click', handleWindowClick);
+          }, []);
+
+          // Safe percentage change logging directly connected to undo history
+          const logAndGetUpdatedStats = useCallback((oldHtml, newHtml) => {
+            const oldPct = calcPct(oldHtml);
+            const newPct = calcPct(newHtml);
+            const delta = newPct - oldPct;
+
+            if (delta > 0) {
+                // Today logs track each percentage change with date and time
+                const updatedLogs = [...todayPercentageLogs, { timestamp: Date.now(), delta }];
+                
+                // Other stats (week, month, allTime) saved as single numbers that keep updating
+                const updatedStats = {
+                    week: (staticStats.week || 0) + delta,
+                    month: (staticStats.month || 0) + delta,
+                    allTime: (staticStats.allTime || 0) + delta
+                };
+                return { updatedLogs, updatedStats };
+            }
+            return { updatedLogs: todayPercentageLogs, updatedStats: staticStats };
+          }, [todayPercentageLogs, staticStats]);
+
+          // Folder Rating Logic
+          const changeFolderRating = useCallback((folderId, valueOrFn, isContinuous = false) => {
+            setDocState(prevState => {
+                const folder = prevState.folders.find(f => f.id === folderId);
+                const oldRating = folder ? (folder.rating || 0) : 0;
+                
+                let targetRating;
+                if (typeof valueOrFn === 'function') targetRating = valueOrFn(oldRating);
+                else targetRating = Number(valueOrFn) || 0;
+                
+                let num = Math.min(100, Math.max(0, targetRating));
+                const delta = num - oldRating;
+
+                if (delta === 0) return prevState;
+
+                const nextLogs = delta > 0 ? [...prevState.todayPercentageLogs, { timestamp: Date.now(), delta }] : prevState.todayPercentageLogs;
+                const nextStats = delta > 0 ? {
+                    week: (prevState.staticStats.week || 0) + delta,
+                    month: (prevState.staticStats.month || 0) + delta,
+                    allTime: (prevState.staticStats.allTime || 0) + delta
+                } : prevState.staticStats;
+
+                const newFolders = prevState.folders.map(f => f.id === folderId ? { ...f, rating: num } : f);
+                
+                const now = Date.now();
+                if (!(isContinuous && (now - lastHistorySaveTime.current < 1000))) {
+                    setUndoStack(prevStack => [...prevStack, prevState]);
+                    setRedoStack([]);
+                    lastHistorySaveTime.current = now;
+                }
+
+                return { 
+                  folders: newFolders, 
+                  paragraphs: prevState.paragraphs,
+                  staticStats: nextStats,
+                  todayPercentageLogs: nextLogs
+                };
+            });
+          }, []);
+
+          // Mouse Wheel Handlers (Percentages)
+          useEffect(() => {
+            const sidebarElement = sidebarListRef.current;
+            if (!sidebarElement) return;
+            const handleSidebarWheel = (e) => {
+              if (selectedFolderId === 'overview') return;
+              const target = e.target.closest('[data-wheel-folder-id]');
+              if (target) {
+                e.preventDefault();
+                const folderId = target.getAttribute('data-wheel-folder-id');
+                const step = e.deltaY < 0 ? 1 : -1;
+                changeFolderRating(folderId, old => old + step, true);
+              }
+            };
+            sidebarElement.addEventListener('wheel', handleSidebarWheel, { passive: false });
+            return () => sidebarElement.removeEventListener('wheel', handleSidebarWheel);
+          }, [selectedFolderId, changeFolderRating]);
+
+          useEffect(() => {
+            const sliderElement = headerSliderRef.current;
+            if (!sliderElement) return;
+            const handleHeaderSliderWheel = (e) => {
+              if (selectedFolderId && selectedFolderId !== 'overview') {
+                e.preventDefault();
+                const step = e.deltaY < 0 ? 1 : -1;
+                changeFolderRating(selectedFolderId, old => old + step, true);
+              }
+            };
+            sliderElement.addEventListener('wheel', handleHeaderSliderWheel, { passive: false });
+            return () => sliderElement.removeEventListener('wheel', handleHeaderSliderWheel);
+          }, [selectedFolderId, changeFolderRating]);
+
+          // Component State Modifiers
+          const addFolder = () => {
+            if (!newFolderName.trim()) return;
+            const newId = generateId();
+            updateDocState([...folders, { id: newId, name: newFolderName.trim(), rating: 0 }], paragraphs);
+            setNewFolderName('');
+            setSelectedFolderId(newId);
+            setLastActiveFolderId(newId);
+          };
+
+          const deleteFolder = (folderId, e) => {
+            if (e) e.stopPropagation();
+            updateDocState(folders.filter(f => f.id !== folderId), paragraphs.filter(p => p.folderId !== folderId));
+            if (selectedFolderId === folderId) {
+                const fallbackId = folders.find(f => f.id !== folderId)?.id || null;
+                setSelectedFolderId(fallbackId);
+                setLastActiveFolderId(fallbackId);
+            }
+            if (excludedOverviewFolders.has(folderId)) {
+                const nextExcluded = new Set(excludedOverviewFolders);
+                nextExcluded.delete(folderId);
+                setExcludedOverviewFolders(nextExcluded);
+            }
+          };
+
+          const moveFolder = (folderId, direction) => {
+            const idx = folders.findIndex(f => f.id === folderId);
+            if (idx < 0) return;
+            const newIdx = idx + direction;
+            if (newIdx < 0 || newIdx >= folders.length) return;
+            const newFolders = [...folders];
+            const temp = newFolders[idx];
+            newFolders[idx] = newFolders[newIdx];
+            newFolders[newIdx] = temp;
+            updateDocState(newFolders, paragraphs);
+          };
+
+          const handleSaveFolderName = (folderId) => {
+            if (tempFolderName.trim()) {
+              updateDocState(folders.map(f => f.id === folderId ? { ...f, name: tempFolderName.trim() } : f), paragraphs);
+            }
+            setEditingFolderId(null);
+          };
+
+          const mergeFolders = (sourceId, targetId) => {
+            if (!targetId || sourceId === targetId) return;
+            updateDocState(
+              folders.filter(f => f.id !== sourceId),
+              paragraphs.map(p => p.folderId === sourceId ? { ...p, folderId: targetId } : p)
+            );
+            if (selectedFolderId === sourceId) {
+                setSelectedFolderId(targetId);
+                setLastActiveFolderId(targetId);
+            }
+            setMergeTargetId('');
+          };
+
+          const addParagraph = () => {
+            if ((!newParagraphText.trim() && !newParagraphTextBack.trim()) || !selectedFolderId || selectedFolderId === 'overview') return;
+            
+            const processedFront = applyShortcuts(newParagraphText.trim());
+            const processedBack = applyShortcuts(newParagraphTextBack.trim());
+            
+            // Only front side highlights are allowed to trigger logs
+            const { updatedLogs, updatedStats } = logAndGetUpdatedStats("", processedFront);
+
+            updateDocState(folders, [...paragraphs, {
+              id: generateId(),
+              folderId: selectedFolderId,
+              text: processedFront,
+              textBack: processedBack,
+              createdAt: Date.now(),
+              archived: false,
+              studyCount: 0,
+              lastStudied: null
+            }], updatedStats, updatedLogs);
+            setNewParagraphText('');
+            setNewParagraphTextBack('');
+            setIsAddingBack(false);
+          };
+
+          const startEditing = (para) => {
+            setEditingParagraphId(para.id);
+            setEditingText(para.text);
+            setEditingTextBack(para.textBack || '');
+            setEditingSide('front');
+          };
+
+          const saveEditing = (paraId) => {
+            const oldPara = paragraphs.find(p => p.id === paraId);
+            if (!oldPara) return;
+
+            const editDiv = document.getElementById(`edit-para-${paraId}`);
+            let currentEditText = editDiv ? editDiv.innerHTML : (editingSide === 'front' ? editingText : editingTextBack);
+            currentEditText = applyShortcuts(currentEditText);
+            
+            const finalFront = editingSide === 'front' ? currentEditText : editingText;
+            const finalBack = editingSide === 'back' ? currentEditText : editingTextBack;
+            
+            if (!finalFront.trim() && !finalBack.trim()) return;
+            
+            // Only evaluate highlights for the front side
+            const { updatedLogs, updatedStats } = logAndGetUpdatedStats(oldPara.text, finalFront);
+
+            updateDocState(folders, paragraphs.map(p => p.id === paraId ? { ...p, text: finalFront, textBack: finalBack } : p), updatedStats, updatedLogs);
+            setEditingParagraphId(null);
+            setEditingText('');
+            setEditingTextBack('');
+          };
+
+          const deleteParagraph = (paraId) => updateDocState(folders, paragraphs.filter(p => p.id !== paraId));
+          const toggleArchive = (paraId) => updateDocState(folders, paragraphs.map(p => p.id === paraId ? { ...p, archived: !p.archived } : p));
+          const toggleFlipCard = (paraId) => setFlippedParas(prev => { const n = new Set(prev); if (n.has(paraId)) n.delete(paraId); else n.add(paraId); return n; });
+          
+          const markFullyStudied = (paraId) => {
+            const para = paragraphs.find(p => p.id === paraId);
+            if (!para || isStudyGated(para)) return;
+            
+            const { chars: charsF, styles: stylesF } = parseHtmlToStyles(para.text);
+            const newStylesF = stylesF.map(s => s === 'green' ? 'neutral' : s);
+            const newHtmlF = rebuildHtml(charsF, newStylesF);
+
+            const { chars: charsB, styles: stylesB } = parseHtmlToStyles(para.textBack);
+            const newStylesB = stylesB.map(s => s === 'green' ? 'neutral' : s);
+            const newHtmlB = rebuildHtml(charsB, newStylesB);
+
+            // Backside is not highlightable/savable in ratings, so logs only track front-side reductions
+            const { updatedLogs, updatedStats } = logAndGetUpdatedStats(para.text, newHtmlF);
+
+            updateDocState(folders, paragraphs.map(p => p.id === paraId ? {
+               ...p,
+               text: newHtmlF,
+               textBack: newHtmlB,
+               studyCount: (p.studyCount || 0) + 1,
+               lastStudied: Date.now()
+            } : p), updatedStats, updatedLogs);
+          };
+
+          const moveParagraph = (paraId, direction) => {
+            const folderParas = paragraphs.filter(p => p.folderId === selectedFolderId);
+            let visualList = folderParas.slice().sort((a, b) => {
+              if (a.archived !== b.archived) return a.archived ? 1 : -1;
+              const aGated = isStudyGated(a);
+              const bGated = isStudyGated(b);
+              if (aGated !== bGated) return aGated ? 1 : -1;
+              return 0;
+            });
+            if (!showArchived) visualList = visualList.filter(p => !p.archived);
+
+            const idx = visualList.findIndex(p => p.id === paraId);
+            if (idx < 0) return;
+            const targetIdx = idx + direction;
+            if (targetIdx < 0 || targetIdx >= visualList.length) return;
+
+            const targetParaId = visualList[targetIdx].id;
+            const idx1 = paragraphs.findIndex(p => p.id === paraId);
+            const idx2 = paragraphs.findIndex(p => p.id === targetParaId);
+
+            const newParagraphs = [...paragraphs];
+            const temp = newParagraphs[idx1];
+            newParagraphs[idx1] = newParagraphs[idx2];
+            newParagraphs[idx2] = temp;
+
+            updateDocState(folders, newParagraphs);
+          };
+
+          const handleFolderClick = (folderId, e) => {
+            if (isOverviewMode) {
+              toggleOverviewExclude(folderId, e);
+            } else if (selectedFolderId === folderId) {
+              if (activeTab === 'readable') {
+                  switchTab('editor');
+              } else {
+                  e.stopPropagation();
+                  setEditingFolderId(folderId);
+                  const folder = folders.find(f => f.id === folderId);
+                  if (folder) setTempFolderName(folder.name);
+              }
+            } else {
+              setSelectedFolderId(folderId);
+              setLastActiveFolderId(folderId);
+              switchTab('editor');
+            }
+            setIsMobileMenuOpen(false);
+          };
+
+          const toggleOverviewExclude = (folderId, e) => {
+            e.stopPropagation();
+            setExcludedOverviewFolders(prev => {
+                const next = new Set(prev);
+                if (next.has(folderId)) next.delete(folderId);
+                else next.add(folderId);
+                return next;
+            });
+          };
+
+          // Precise Character Offset Range selection calculation (relative to container text)
+          const getSelectionOffsets = (container) => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return null;
+            const range = selection.getRangeAt(0);
+            
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(container);
+            preCaretRange.setEnd(range.startContainer, range.startOffset);
+            const start = preCaretRange.toString().length;
+            
+            const end = start + range.toString().length;
+            return { start, end };
+          };
+
+          const handleTextSelection = (e, paraId, isFlipped) => {
+            // Requirement 2: Disable highlight selection for the backside
+            if (isFlipped) return;
+
+            const para = paragraphs.find(p => p.id === paraId);
+            if (!para || isStudyGated(para)) return; 
+
+            const container = document.getElementById(`para-content-${paraId}`);
+            if (!container) return;
+
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed && selection.toString().trim() !== "") {
+                const offsets = getSelectionOffsets(container);
+                if (!offsets) return;
+
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+
+                const { styles } = parseHtmlToStyles(para.text);
+                const selectedStyles = styles.slice(offsets.start, offsets.end);
+                const hasHighlights = selectedStyles.includes('red') || selectedStyles.includes('green');
+
+                setSelectionMenu({
+                    visible: true,
+                    x: rect.left + rect.width / 2,
+                    y: rect.top - 40 + window.scrollY,
+                    paraId: paraId,
+                    start: offsets.start,
+                    end: offsets.end,
+                    showRemove: hasHighlights,
+                    styleContext: null,
+                    isFlipped: false
+                });
+            } else {
+                setSelectionMenu(prev => ({...prev, visible: false}));
+            }
+          };
+
+          const handleHighlightSpanClick = (e, paraId, isFlipped) => {
+            // Requirement 2: Do not allow click to edit highlights on the backside
+            if (isFlipped) return;
+
+            const para = paragraphs.find(p => p.id === paraId);
+            if (!para || isStudyGated(para)) return; 
+
+            const clickedSpan = e.target.closest('span.bg-red-200, span.bg-green-200');
+            if (!clickedSpan) return;
+            
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed) return; 
+            
+            e.stopPropagation();
+            const container = document.getElementById(`para-content-${paraId}`);
+            if (!container) return;
+
+            const preRange = document.createRange();
+            preRange.selectNodeContents(container);
+            preRange.setEndBefore(clickedSpan);
+            const start = preRange.toString().length;
+            const end = start + clickedSpan.textContent.length;
+
+            const rect = clickedSpan.getBoundingClientRect();
+            const isRed = clickedSpan.className.includes('bg-red-200');
+
+            setSelectionMenu({
+              visible: true,
+              x: rect.left + rect.width / 2,
+              y: rect.top - 45 + window.scrollY,
+              paraId: paraId,
+              start: start,
+              end: end,
+              showRemove: true,
+              styleContext: isRed ? 'red' : 'green',
+              isFlipped: false
+            });
+          };
+
+          const applyHighlight = (styleType) => {
+            const { paraId, start, end } = selectionMenu;
+            const para = paragraphs.find(p => p.id === paraId);
+            if (!para || isStudyGated(para)) return;
+
+            const currentStr = para.text;
+            const { chars, styles } = parseHtmlToStyles(currentStr);
+            
+            for (let i = start; i < end; i++) {
+              if (i >= 0 && i < styles.length) styles[i] = styleType;
+            }
+
+            const newHtml = rebuildHtml(chars, styles);
+            const { updatedLogs, updatedStats } = logAndGetUpdatedStats(currentStr, newHtml);
+
+            updateDocState(folders, paragraphs.map(p => {
+                if (p.id !== paraId) return p;
+                return { ...p, text: newHtml };
+            }), updatedStats, updatedLogs);
+            
+            window.getSelection().removeAllRanges();
+            setSelectionMenu(prev => ({...prev, visible: false}));
+          };
+
+          const handleCopyToClipboard = () => {
+            if (textAreaRef.current) {
+              textAreaRef.current.select();
+              try { document.execCommand('copy'); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); } 
+              catch (err) { console.error("Failed to copy", err); }
+            }
+          };
+
+          const handlePasteAll = async () => {
+            try {
+                let pastedText = await navigator.clipboard.readText();
+                if (pastedText) {
+                    const { folders: parsedF, paragraphs: parsedP, staticStats: parsedS, todayPercentageLogs: parsedTL } = parseTextToState(pastedText, docState);
+                    if (parsedF.length > 0 || parsedP.length > 0) {
+                        updateDocState(parsedF, parsedP, parsedS, parsedTL);
+                        setReadableText(generateReadableText(parsedF, parsedP, parsedS, parsedTL));
+                    }
+                }
+            } catch (err) {
+                const pastedText = prompt("Paste your App Data here:");
+                if (pastedText) {
+                    const { folders: parsedF, paragraphs: parsedP, staticStats: parsedS, todayPercentageLogs: parsedTL } = parseTextToState(pastedText, docState);
+                    if (parsedF.length > 0 || parsedP.length > 0) {
+                        updateDocState(parsedF, parsedP, parsedS, parsedTL);
+                        setReadableText(generateReadableText(parsedF, parsedP, parsedS, parsedTL));
+                    }
+                }
+            }
+          };
+
+          const triggerContextMenu = (e, type, targetId = null) => {
+            if (e.target.closest('input') || e.target.closest('textarea') || e.target.isContentEditable) return;
+            e.preventDefault(); e.stopPropagation();
+            setSelectionMenu(prev => ({ ...prev, visible: false }));
+            setContextMenu({ visible: true, x: e.clientX, y: e.clientY, type, targetId });
+          };
+
+          const handleGlobalContextMenu = (e) => {
+            if (e.target.closest('input') || e.target.closest('textarea') || e.target.isContentEditable) return;
+            e.preventDefault();
+            setContextMenu({ visible: true, x: e.clientX, y: e.clientY, type: 'default', targetId: null });
+          };
+
+          const handleStartRatingEdit = (e, folder) => {
+            e.stopPropagation(); setEditingRatingFolderId(folder.id); setTempRatingFolderVal(String(folder.rating || 0));
+          };
+          const handleSaveRatingEdit = (folderId) => { changeFolderRating(folderId, tempRatingVal); setEditingRatingFolderId(null); };
+
+          const isOverviewMode = selectedFolderId === 'overview';
+          const currentFolder = isOverviewMode ? null : folders.find(f => f.id === selectedFolderId);
+          
+          let folderParagraphs = paragraphs.filter(p => p.folderId === selectedFolderId);
+          folderParagraphs.sort((a, b) => {
+              if (a.archived !== b.archived) return a.archived ? 1 : -1;
+              const aGated = isStudyGated(a);
+              const bGated = isStudyGated(b);
+              if (aGated !== bGated) return aGated ? 1 : -1;
+              return 0;
+          });
+
+          if (!showArchived) folderParagraphs = folderParagraphs.filter(p => !p.archived);
+
+          const filteredParagraphs = searchQuery 
+            ? folderParagraphs.filter(p => p.text.toLowerCase().includes(searchQuery.toLowerCase()) || (p.textBack || '').toLowerCase().includes(searchQuery.toLowerCase()))
+            : folderParagraphs;
+
+          // Compute Overview Data
+          let overviewData = {
+              today: [], week: [], month: [], older: [],
+              study0: [], study1: [], study2: [], study3: [], study4: [], study5plus: []
+          };
+          
+          // Compute "Today" growth live from undo/redo-bound logs
+          let growthData = { today: 0, week: staticStats?.week || 0, month: staticStats?.month || 0, allTime: staticStats?.allTime || 0 };
+
+          if (isOverviewMode) {
+              const overviewParas = paragraphs.filter(p => {
+                  if (p.archived && !showArchived) return false;
+                  return !excludedOverviewFolders.has(p.folderId);
+              });
+
+              const todayStart = new Date();
+              todayStart.setHours(0, 0, 0, 0);
+              const tsToday = todayStart.getTime();
+              const tsWeek = tsToday - (7 * 24 * 60 * 60 * 1000);
+              const tsMonth = tsToday - (30 * 24 * 60 * 60 * 1000);
+
+              overviewParas.forEach(p => {
+                  const latestDate = Math.max(p.createdAt, p.lastStudied || 0);
+                  if (latestDate >= tsToday) overviewData.today.push(p);
+                  else if (latestDate >= tsWeek) overviewData.week.push(p);
+                  else if (latestDate >= tsMonth) overviewData.month.push(p);
+                  else overviewData.older.push(p);
+                  
+                  const c = p.studyCount || 0;
+                  if (c === 0) overviewData.study0.push(p);
+                  else if (c === 1) overviewData.study1.push(p);
+                  else if (c === 2) overviewData.study2.push(p);
+                  else if (c === 3) overviewData.study3.push(p);
+                  else if (c === 4) overviewData.study4.push(p);
+                  else overviewData.study5plus.push(p);
+              });
+              
+              // Only live-calculate "Today" logs so they can be undone & redone seamlessly.
+              if (todayPercentageLogs && todayPercentageLogs.length > 0) {
+                todayPercentageLogs.forEach(log => {
+                  if (log.timestamp >= tsToday) {
+                    growthData.today += log.delta;
+                  }
+                });
+              }
+          }
+
+          return (
+            <div 
+              className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden"
+              onContextMenu={handleGlobalContextMenu}
+            >
+              
+              {isMobileMenuOpen && (
+                  <div className="fixed inset-0 bg-slate-900/50 z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
+              )}
+
+              {/* Sidebar: Navigation */}
+              <aside className={`fixed md:relative inset-y-0 left-0 z-40 w-4/5 max-w-sm md:max-w-none md:w-[27rem] bg-white border-r border-slate-200 flex flex-col h-full flex-shrink-0 transform transition-transform duration-200 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                {/* Create Folder Input */}
+                <div 
+                  className="p-4 border-b border-slate-100 bg-slate-50/50"
+                  onContextMenu={(e) => triggerContextMenu(e, 'sidebar')}
+                >
+                  <div className="flex gap-2">
+                    <input
+                      type="text" 
+                      placeholder="New folder name..." 
+                      value={newFolderName} 
+                      onChange={(e) => setNewFolderName(e.target.value)} 
+                      onKeyDown={(e) => e.key === 'Enter' && addFolder()}
+                      onContextMenu={(e) => triggerContextMenu(e, 'sidebar')}
+                      className="flex-1 min-w-0 px-3 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <button onClick={addFolder} className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors shadow-sm" title="Add root folder"><PlusIcon className="w-4 h-4" /></button>
+                  </div>
+                </div>
+
+                {/* Folders List */}
+                <div ref={sidebarListRef} className="flex-1 overflow-y-auto p-4 space-y-1" onContextMenu={(e) => triggerContextMenu(e, 'sidebar')}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Folders</span>
+                    {selectedFolderId && selectedFolderId !== 'overview' && <button onClick={() => setSelectedFolderId(null)} className="text-xs text-blue-600 hover:underline">Clear Selection</button>}
+                  </div>
+                  {folders.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-sm">No folders in this environment. Create one to get started!</div>
+                  ) : (
+                    folders.map(folder => {
+                      const isSelected = selectedFolderId === folder.id;
+                      const isRatingEditing = editingRatingFolderId === folder.id;
+                      const isNameEditing = editingFolderId === folder.id;
+                      const isIncluded = !excludedOverviewFolders.has(folder.id);
+
+                      return (
+                        <div key={folder.id} className="select-none">
+                          <div
+                            onClick={(e) => handleFolderClick(folder.id, e)}
+                            onContextMenu={(e) => triggerContextMenu(e, 'folder', folder.id)}
+                            className={`group flex items-center justify-between py-2 px-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                          >
+                            <div className="flex items-center space-x-2 min-w-0 flex-1">
+                              {isOverviewMode ? (
+                                <input type="checkbox" checked={isIncluded} readOnly className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                              ) : (
+                                <FolderIcon className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-gray-400'}`} />
+                              )}
+                              
+                              {isNameEditing ? (
+                                <input type="text" value={tempFolderName} onClick={(e) => e.stopPropagation()} onChange={(e) => setTempFolderName(e.target.value)} onBlur={() => handleSaveFolderName(folder.id)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveFolderName(folder.id); if (e.key === 'Escape') setEditingFolderId(null); }} autoFocus className="w-full px-1 text-xs border border-blue-400 rounded text-slate-800 outline-none" />
+                              ) : (
+                                <span className="truncate text-base cursor-pointer" title={`${folder.name}`}>{folder.name}</span>
+                              )}
+                            </div>
+                            
+                            {!isOverviewMode && (
+                                <div className="flex items-center space-x-1.5 flex-shrink-0 ml-auto pl-2" data-wheel-folder-id={folder.id}>
+                                {isRatingEditing ? (
+                                    <input type="number" min="0" max="100" value={tempRatingVal} onClick={(e) => e.stopPropagation()} onChange={(e) => setTempRatingFolderVal(e.target.value)} onBlur={() => handleSaveRatingEdit(folder.id)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRatingEdit(folder.id); if (e.key === 'Escape') setEditingRatingFolderId(null); }} autoFocus className="w-12 px-1 text-xs border border-blue-400 rounded text-slate-800 text-center font-normal outline-none focus:ring-1 focus:ring-blue-400" />
+                                ) : (
+                                    <span onClick={(e) => handleStartRatingEdit(e, folder)} className="text-sm text-slate-400 font-normal hover:text-blue-600 hover:underline cursor-pointer transition">({folder.rating || 0}%)</span>
+                                )}
+                                <button onClick={(e) => deleteFolder(folder.id, e)} className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded transition-all" title="Delete folder and contents"><TrashIcon className="w-3.5 h-3.5" /></button>
+                                </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                
+                <div className="p-4 border-t border-slate-200 bg-slate-50">
+                    <button 
+                        onClick={() => {
+                          if (isOverviewMode) {
+                            setSelectedFolderId(lastActiveFolderId || '1');
+                          } else {
+                            if (selectedFolderId && selectedFolderId !== 'overview') {
+                              setLastActiveFolderId(selectedFolderId);
+                            }
+                            setSelectedFolderId('overview');
+                          }
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full py-2.5 rounded-lg flex justify-center items-center gap-2 font-medium transition-colors ${isOverviewMode ? 'bg-indigo-100 text-indigo-700 shadow-sm border border-indigo-200' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                    >
+                        <OverviewIcon className="w-4 h-4" />
+                        Informational Overview (tab)
+                    </button>
+                </div>
+              </aside>
+
+              {/* Main Content Area */}
+              <main className="flex-1 flex flex-col h-full bg-slate-50 min-w-0">
+                <header className="bg-white border-b border-slate-200 px-4 md:px-6 flex items-center flex-shrink-0" onContextMenu={(e) => triggerContextMenu(e, 'header')}>
+                  
+                  {/* Left Hamburger */}
+                  <button className="md:hidden p-1.5 -ml-1 mr-2 text-slate-500 hover:bg-slate-100 rounded-md shrink-0" onClick={() => setIsMobileMenuOpen(true)}>
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                  </button>
+                  
+                  {/* Horizontal Scrollable Header Area */}
+                  <div className="flex items-center gap-4 flex-1 overflow-x-auto scrollbar-thin py-3 pl-1 pr-2">
+                    
+                    {/* Title Part of scroll zone */}
+                    <div className="flex items-center gap-2 shrink-0 border-r border-slate-200 pr-4">
+                      {isOverviewMode ? <OverviewIcon className="text-indigo-500 w-5 h-5" /> : <FolderIcon className="text-slate-400 w-5 h-5" />}
+                      <h2 className="font-semibold text-slate-800 text-lg whitespace-nowrap" title={isOverviewMode ? 'Overview' : (currentFolder ? currentFolder.name : 'Select a Folder')}>
+                          {isOverviewMode ? 'Informational Overview' : (currentFolder ? currentFolder.name : 'Select a Folder')}
+                      </h2>
+                    </div>
+                    
+                    {!isOverviewMode && (
+                        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg flex-shrink-0">
+                          <button onClick={undo} disabled={undoStack.length === 0} className="px-2 py-1.5 text-slate-400 hover:text-indigo-600 disabled:opacity-40 disabled:hover:text-slate-400 transition cursor-pointer" title="Undo Action (Ctrl+Z)"><UndoIcon /></button>
+                          <button onClick={redo} disabled={redoStack.length === 0} className="px-2 py-1.5 text-slate-400 hover:text-indigo-600 disabled:opacity-40 disabled:hover:text-slate-400 transition cursor-pointer border-r border-slate-200 pr-3" title="Redo Action (Ctrl+Y)"><RedoIcon /></button>
+                          <button onClick={() => switchTab('editor')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'editor' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Document Editor</button>
+                          <button onClick={() => switchTab('readable')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'readable' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>App Data</button>
+                        </div>
+                    )}
+                    
+                    {currentFolder && activeTab === 'editor' && !isOverviewMode && (
+                      <div className="flex items-center gap-4 flex-shrink-0">
+                        <div className="w-px h-6 bg-slate-200 hidden sm:block"></div>
+                        <div ref={headerSliderRef} className="flex items-center gap-2 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200" title="Scroll mouse wheel here to tune by 1%">
+                          <span className="text-xs text-slate-500 font-medium w-8 text-right">{currentFolder.rating || 0}%</span>
+                          <input type="range" min="0" max="100" value={currentFolder.rating || 0} onChange={(e) => changeFolderRating(currentFolder.id, e.target.value, true)} className="w-20 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                        </div>
+                        <select value={mergeTargetId} onChange={(e) => mergeFolders(currentFolder.id, e.target.value)} className="text-xs px-2 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                          <option value="">Merge into...</option>
+                          {folders.filter(f => f.id !== currentFolder.id).map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}
+                        </select>
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5" />
+                          <span className="text-xs text-slate-600 whitespace-nowrap">Archived</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input type="checkbox" checked={showPercentages} onChange={(e) => setShowPercentages(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5" />
+                          <span className="text-xs text-slate-600 whitespace-nowrap">Show Percentages</span>
+                        </label>
+                        <div className="relative w-40 sm:w-48">
+                          <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                          <span className="absolute left-2.5 top-2.5 text-slate-400"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto p-4 md:p-6" onContextMenu={(e) => { if (currentFolder) triggerContextMenu(e, 'main'); }}>
+                  {isOverviewMode ? (
+                      <div className="max-w-4xl mx-auto mt-4 md:mt-10 space-y-8 pb-20">
+                          
+                          {/* Unclipped boxes without overflow-hidden */}
+                          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 relative">
+                              <div className="bg-blue-50 border-b border-blue-100 p-4 md:p-6 flex items-center gap-4 rounded-t-2xl">
+                                  <div className="p-3 bg-blue-100 text-blue-600 rounded-xl shrink-0">
+                                      <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <div>
+                                          <h3 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center">
+                                            Progress Growth
+                                            <div className="relative group inline-block ml-2 cursor-pointer z-[100]">
+                                              <InfoIcon className="w-5 h-5 text-blue-500 hover:text-blue-700" />
+                                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 p-3 bg-slate-900 text-slate-200 text-xs rounded-xl shadow-xl hidden group-hover:block pointer-events-none text-center font-normal">
+                                                This percentage is how much the percentages have gone up today. Gated or reversed states via Undo/Redo are instantly accounted for.
+                                              </div>
+                                            </div>
+                                          </h3>
+                                          <p className="text-sm md:text-base text-slate-500 mt-1">Total percentage points gained in the app.</p>
+                                      </div>
+                                  </div>
+                              </div>
+                              <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                                  <div className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-blue-600">{growthData.today}%</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">Today</div>
+                                  </div>
+                                  <div className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-indigo-500">{growthData.week}%</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">This Week</div>
+                                  </div>
+                                  <div className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-purple-600">{growthData.month}%</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">This Month</div>
+                                  </div>
+                                  <div className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-emerald-600">{growthData.allTime}%</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">All Time</div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 relative">
+                              <div className="bg-indigo-50 border-b border-indigo-100 p-4 md:p-6 flex items-center gap-4 rounded-t-2xl">
+                                  <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl shrink-0">
+                                      <ChartIcon className="w-6 h-6 md:w-8 md:h-8" />
+                                  </div>
+                                  <div>
+                                      <h3 className="text-xl md:text-2xl font-bold text-slate-900">Workspace Statistics</h3>
+                                      <p className="text-sm md:text-base text-slate-500 mt-1">Based on "Created" or "Last Studied" activity for included folders.</p>
+                                  </div>
+                              </div>
+                              <div className="p-4 md:p-6 grid grid-cols-2 gap-4 md:gap-6">
+                                  <div onClick={() => setStatModal({ visible: true, title: 'Today', paras: overviewData.today })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-indigo-600">{overviewData.today.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">Today</div>
+                                  </div>
+                                  <div onClick={() => setStatModal({ visible: true, title: 'Today - This Week', paras: overviewData.week })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-blue-600">{overviewData.week.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">Today - This Week</div>
+                                  </div>
+                                  <div onClick={() => setStatModal({ visible: true, title: 'This Week - This Month', paras: overviewData.month })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-emerald-600">{overviewData.month.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">This Week - This Month</div>
+                                  </div>
+                                  <div onClick={() => setStatModal({ visible: true, title: 'A Month+', paras: overviewData.older })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-slate-400">{overviewData.older.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">A Month+</div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 relative">
+                              <div className="bg-emerald-50 border-b border-emerald-100 p-4 md:p-6 flex items-center gap-4 rounded-t-2xl">
+                                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl shrink-0">
+                                      <CheckIcon className="w-6 h-6 md:w-8 md:h-8" />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <div>
+                                          <h3 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center">
+                                            Study Frequency
+                                            <div className="relative group inline-block ml-2 cursor-pointer z-[100]">
+                                              <InfoIcon className="w-5 h-5 text-indigo-500 hover:text-indigo-700" />
+                                              <div className="absolute left-[20%] md:left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 md:w-72 p-4 bg-slate-900 text-slate-200 text-xs rounded-xl shadow-xl hidden group-hover:block pointer-events-none text-left leading-relaxed font-normal">
+                                                <p className="font-bold text-indigo-400 mb-1.5">Upgrading Levels (Time Gates):</p>
+                                                <ul className="list-disc pl-4 space-y-1">
+                                                  <li><strong>Level 1 → 2:</strong> Requires 1/4 month (7.5 days)</li>
+                                                  <li><strong>Level 2 → 3:</strong> Requires 1/4 month (7.5 days)</li>
+                                                  <li><strong>Level 3 → 4:</strong> Requires Half a month (15 days)</li>
+                                                  <li><strong>Level 4 → 5:</strong> Requires 1 month (30 days)</li>
+                                                </ul>
+                                                <p className="mt-2 text-[10px] text-rose-300 italic font-medium border-t border-slate-800 pt-1.5">Locked paragraphs turn red, sink to the bottom, and highlights cannot be adjusted.</p>
+                                              </div>
+                                            </div>
+                                          </h3>
+                                          <p className="text-sm md:text-base text-slate-500 mt-1">Number of times paragraphs have been marked "Fully Studied".</p>
+                                      </div>
+                                  </div>
+                              </div>
+                              <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+                                  <div onClick={() => setStatModal({ visible: true, title: 'Studied 0 Times', paras: overviewData.study0 })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-slate-400">{overviewData.study0.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">0 Times</div>
+                                  </div>
+                                  <div onClick={() => setStatModal({ visible: true, title: 'Studied 1 Time', paras: overviewData.study1 })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-emerald-500">{overviewData.study1.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">1 Time</div>
+                                  </div>
+                                  <div onClick={() => setStatModal({ visible: true, title: 'Studied 2 Times', paras: overviewData.study2 })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-emerald-600">{overviewData.study2.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">2 Times</div>
+                                  </div>
+                                  <div onClick={() => setStatModal({ visible: true, title: 'Studied 3 Times', paras: overviewData.study3 })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-indigo-500">{overviewData.study3.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">3 Times</div>
+                                  </div>
+                                  <div onClick={() => setStatModal({ visible: true, title: 'Studied 4 Times', paras: overviewData.study4 })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-indigo-600">{overviewData.study4.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">4 Times</div>
+                                  </div>
+                                  <div onClick={() => setStatModal({ visible: true, title: 'Studied 5+ Times', paras: overviewData.study5plus })} className="bg-slate-50 rounded-xl p-4 md:p-5 border border-slate-100 flex flex-col justify-center items-center text-center cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <div className="text-3xl md:text-4xl font-extrabold text-purple-600">{overviewData.study5plus.length}</div>
+                                      <div className="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">5+ Times</div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  ) : activeTab === 'readable' ? (
+                    <div className="max-w-4xl mx-auto space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">App Data</h3>
+                          <p className="text-sm text-slate-500">Edit, structure, and export directly from this plain text document.</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={handlePasteAll} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm bg-white border border-slate-200 text-slate-700 hover:bg-slate-50">
+                            <PasteIcon className="w-4 h-4" /> Paste All
+                          </button>
+                          <button onClick={handleCopyToClipboard} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ${copySuccess ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
+                            {copySuccess ? <><CheckIcon className="w-4 h-4" /> Copied!</> : <><CopyIcon className="w-4 h-4" /> Copy All</>}
+                          </button>
+                          <a href="https://docs.google.com/document/d/1cdXb89j0-RPMXlgnJ2jzhcuV7nFgZgywY0J2DYdD-Xo/edit?tab=t.ffq49l65rq8a#bookmark=id.d6ro8n4zvfyp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white">
+                            Save Data
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="relative bg-slate-900 rounded-xl p-6 border border-slate-800 shadow-md">
+                        <textarea ref={textAreaRef} value={readableText} onChange={(e) => setReadableText(e.target.value)} onBlur={handleReadableTextBlur} placeholder="You can type structured backups here..." className="w-full h-[65vh] bg-transparent text-slate-200 font-mono text-sm leading-relaxed focus:outline-none resize-none" />
+                      </div>
+                    </div>
+                  ) : (
+                    !currentFolder ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
+                        <div className="p-4 bg-blue-50 rounded-full text-blue-500 mb-4"><FolderIcon className="w-8 h-8" /></div>
+                        <h3 className="text-lg font-semibold text-slate-900">No Folder Selected</h3>
+                        <p className="text-sm text-slate-500 mt-2">Choose a folder from the sidebar tree or create a new one to begin adding and managing your text paragraphs.</p>
+                      </div>
+                    ) : (
+                      <div className="max-w-4xl mx-auto space-y-8">
+                        
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                          <h4 className="text-base font-semibold text-slate-800 mb-3">
+                            Add New Paragraph <span className="text-indigo-600 font-bold ml-1">{isAddingBack ? '(Back)' : '(Front)'}</span>
+                          </h4>
+                          {isAddingBack ? (
+                            <textarea rows={4} placeholder="Spanish side / Back side..." value={newParagraphTextBack} onChange={(e) => setNewParagraphTextBack(e.target.value)} className="w-full px-4 py-3 text-base bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none" />
+                          ) : (
+                            <textarea rows={4} placeholder="Type or paste your text paragraph here... (%gtext%g to highlight green)" value={newParagraphText} onChange={(e) => setNewParagraphText(e.target.value)} className="w-full px-4 py-3 text-base bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none" />
+                          )}
+                          <div className="flex justify-between mt-3 items-center">
+                            <button onClick={() => setIsAddingBack(!isAddingBack)} className="px-4 py-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-semibold rounded-md transition-colors text-sm">
+                                Flip To {isAddingBack ? 'Front' : 'Back'}
+                            </button>
+                            <button onClick={addParagraph} disabled={(!newParagraphText.trim() && !newParagraphTextBack.trim())} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-md transition-colors flex items-center gap-1.5 shadow-sm">
+                                <PlusIcon className="w-4 h-4" /> Save Paragraph
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Paragraphs ({filteredParagraphs.length})</h3>
+                          </div>
+
+                          {filteredParagraphs.length === 0 ? (
+                            <div className="bg-white rounded-xl border border-dashed border-slate-200 p-10 text-center text-slate-400 text-base">
+                              <FileTextIcon className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+                              No paragraphs in this folder {searchQuery && 'matching your search'}. Add your first paragraph above!
+                            </div>
+                          ) : (
+                            filteredParagraphs.map((para) => {
+                              const isFlipped = flippedParas.has(para.id);
+                              const displayedHtml = isFlipped ? (para.textBack || "<em class='text-slate-400'>No back side</em>") : para.text;
+                              
+                              const { styles } = parseHtmlToStyles(para.text);
+                              const totalChars = styles.length;
+                              const greenChars = styles.filter(s => s === 'green').length;
+                              const greenPercentage = totalChars > 0 ? Math.round((greenChars / totalChars) * 100) : 0;
+                              
+                              const isHighlighted = highlightParaId === para.id;
+                              const isGated = isStudyGated(para);
+                              const remainingStr = getCooldownRemainingStr(para);
+
+                              return (
+                                <div 
+                                  id={`para-container-${para.id}`} 
+                                  key={para.id} 
+                                  onContextMenu={(e) => triggerContextMenu(e, 'paragraph', para.id)} 
+                                  className={`group bg-white rounded-2xl border p-6 lg:p-8 transition-all flex flex-col justify-between ${
+                                    isGated 
+                                      ? 'border-rose-300 bg-rose-50/40 shadow-inner' 
+                                      : para.archived 
+                                        ? 'border-dashed border-slate-300 bg-slate-50' 
+                                        : 'border-slate-200 shadow-sm'
+                                  } ${isHighlighted ? 'ring-4 ring-indigo-400 bg-indigo-50/50' : 'hover:border-blue-300'}`}
+                                >
+                                  {editingParagraphId === para.id ? (
+                                    <div className="space-y-3">
+                                      <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs font-bold text-slate-400 uppercase">{editingSide === 'front' ? 'Front Side' : 'Back Side'}</span>
+                                      </div>
+                                      
+                                      {/* Restored backside/Spanish editing capability */}
+                                      <div
+                                          key={editingSide}
+                                          id={`edit-para-${para.id}`}
+                                          contentEditable={true}
+                                          suppressContentEditableWarning
+                                          dangerouslySetInnerHTML={{ __html: editingSide === 'front' ? editingText : editingTextBack }}
+                                          className={`w-full px-4 py-3 text-lg leading-relaxed border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 min-h-[120px] ${editingSide === 'front' ? 'bg-slate-50 border-blue-400' : 'bg-slate-50 border-indigo-400'}`}
+                                      />
+                                      <div className="flex justify-between items-center mt-3">
+                                        <button onClick={() => {
+                                            const editDiv = document.getElementById(`edit-para-${para.id}`);
+                                            if (editDiv) {
+                                                if (editingSide === 'front') setEditingText(editDiv.innerHTML);
+                                                else setEditingTextBack(editDiv.innerHTML);
+                                            }
+                                            setEditingSide(editingSide === 'front' ? 'back' : 'front');
+                                        }} className="px-4 py-1.5 text-sm font-bold text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors">
+                                            Flip To {editingSide === 'front' ? 'Back' : 'Front'}
+                                        </button>
+                                        <div className="flex gap-3">
+                                          <button onClick={() => setEditingParagraphId(null)} className="px-4 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors">Cancel</button>
+                                          <button onClick={() => saveEditing(para.id)} className="px-4 py-1.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">Save</button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <div 
+                                        id={`para-content-${para.id}`}
+                                        dangerouslySetInnerHTML={{ __html: displayedHtml }}
+                                        className={`text-lg leading-[1.8] whitespace-pre-wrap ${isGated || isFlipped ? 'select-none text-slate-500' : 'selection:bg-blue-200'} ${para.archived ? 'text-slate-400 line-through' : 'text-slate-800'}`}
+                                        onMouseUp={(e) => !isGated && handleTextSelection(e, para.id, isFlipped)}
+                                        onClick={(e) => !isGated && handleHighlightSpanClick(e, para.id, isFlipped)}
+                                      />
+                                      <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+                                        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+                                          <span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 shadow-sm">
+                                            Created: {new Date(para.createdAt).toLocaleDateString()}
+                                          </span>
+                                          {para.lastStudied && (
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm">
+                                              Last Studied: {new Date(para.lastStudied).toLocaleDateString()}
+                                              <span className="ml-1 opacity-75">({para.studyCount})</span>
+                                            </span>
+                                          )}
+                                          {showPercentages && (
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm cursor-default" title="This is the percentage of this paragraph block that is highlighted green.">
+                                              <InfoIcon className="w-3 h-3 mr-1" />
+                                              {greenPercentage}%
+                                            </span>
+                                          )}
+                                          {isGated && (
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-semibold bg-rose-100 text-rose-700 border border-rose-200 shadow-sm animate-pulse">
+                                              <LockIcon className="w-3.5 h-3.5 mr-1" />
+                                              Gated ({remainingStr || 'Cooldown active'})
+                                            </span>
+                                          )}
+                                          {para.archived && <span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100 shadow-sm">Archived</span>}
+                                        </div>
+                                        <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-4">
+                                          <button 
+                                            onClick={() => markFullyStudied(para.id)} 
+                                            disabled={isGated}
+                                            className={`px-3 py-1 text-xs font-bold rounded transition-colors shadow ${
+                                              isGated 
+                                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300 shadow-none' 
+                                                : 'bg-indigo-500 hover:bg-indigo-600 text-white'
+                                            }`} 
+                                            title={isGated ? "Cooldown locked" : "Mark as studied and reset green highlights"}
+                                          >
+                                            {isGated ? 'Locked' : 'Fully Studied'}
+                                          </button>
+                                          <button onClick={() => toggleArchive(para.id)} className="px-3 py-1 text-xs font-semibold text-amber-600 hover:bg-amber-50 rounded transition-colors" title={para.archived ? "Restore text" : "Archive text"}>{para.archived ? "Restore" : "Archive"}</button>
+                                          
+                                          <button onClick={() => toggleFlipCard(para.id)} className="px-3 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded transition-colors border border-indigo-100 bg-white" title="Flip to front/back">Flip Card</button>
+
+                                          <button onClick={() => startEditing(para)} className="px-3 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit text">Edit</button>
+                                          <button onClick={() => deleteParagraph(para.id)} className="p-1.5 text-slate-400 hover:text-red-500 rounded transition-colors" title="Delete text"><TrashIcon className="w-4 h-4" /></button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                      </div>
+                    )
+                  )}
+                </div>
+              </main>
+
+              {/* Floating Fixed Button */}
+              <a 
+                href="https://docs.google.com/document/d/1cdXb89j0-RPMXlgnJ2jzhcuV7nFgZgywY0J2DYdD-Xo/edit?tab=t.ir4nvl4ib308#bookmark=kix.vi11k62sp4a2" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="fixed bottom-4 right-4 md:bottom-6 md:right-6 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 md:px-5 md:py-3 rounded-full shadow-xl font-bold text-xs md:text-sm transition-transform hover:scale-105 z-50 flex items-center gap-2 border border-indigo-500"
+              >
+                Update Notes
+              </a>
+
+              {/* Floating Selection Highlighting Tool */}
+              {selectionMenu.visible && !selectionMenu.isFlipped && (
+                <div 
+                  id="selection-toolbar"
+                  className="fixed flex gap-2 bg-slate-850 bg-slate-900 p-2 rounded-lg shadow-xl z-[9999] transform -translate-x-1/2 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-900"
+                  style={{ top: selectionMenu.y, left: selectionMenu.x }}
+                >
+                  {(selectionMenu.styleContext === null || selectionMenu.styleContext === 'red' || selectionMenu.showRemove) && (
+                    <button onClick={() => applyHighlight('green')} className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded shadow transition">Good With</button>
+                  )}
+                  {(selectionMenu.styleContext === null || selectionMenu.styleContext === 'green' || selectionMenu.showRemove) && (
+                    <button onClick={() => applyHighlight('red')} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded shadow transition">Needs Work</button>
+                  )}
+                  {selectionMenu.showRemove && (
+                    <button onClick={() => applyHighlight('neutral')} className="px-3 py-1.5 bg-slate-500 hover:bg-slate-600 text-white text-xs font-bold rounded shadow transition">Remove Highlight</button>
+                  )}
+                </div>
+              )}
+
+              {/* Context Menu UI Elements */}
+              {contextMenu.visible && (
+                <div className="fixed bg-white border border-slate-200 shadow-xl rounded-xl py-2 w-48 z-[9998] text-xs font-semibold text-slate-700" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
+                  {contextMenu.type === 'sidebar' && (
+                    <button onClick={() => { const newName = prompt("Enter new folder name:"); if (newName && newName.trim()) { const newId = generateId(); updateDocState([...folders, { id: newId, name: newName.trim(), rating: 0 }], paragraphs); setSelectedFolderId(newId); setLastActiveFolderId(newId); } setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2"><PlusIcon className="w-3.5 h-3.5 text-slate-400" /> New Folder</button>
+                  )}
+                  {contextMenu.type === 'folder' && (() => {
+                    const idx = folders.findIndex(f => f.id === contextMenu.targetId);
+                    return (
+                      <>
+                        <button onClick={() => { const folder = folders.find(f => f.id === contextMenu.targetId); if (folder) { setEditingFolderId(folder.id); setTempFolderName(folder.name); } setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2">Rename Folder</button>
+                        <button onClick={() => { const folder = folders.find(f => f.id === contextMenu.targetId); if (folder) { setEditingRatingFolderId(folder.id); setTempRatingFolderVal(String(folder.rating || 0)); } setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2">Type Percentage</button>
+                        {(idx > 0 || idx < folders.length - 1) && <div className="border-t border-slate-100 my-1"></div>}
+                        {idx > 0 && (
+                          <button onClick={() => { moveFolder(contextMenu.targetId, -1); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2">Move Up ↑</button>
+                        )}
+                        {idx < folders.length - 1 && (
+                          <button onClick={() => { moveFolder(contextMenu.targetId, 1); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2">Move Down ↓</button>
+                        )}
+                        <div className="border-t border-slate-100 my-1"></div>
+                        <button onClick={() => { if (confirm("Are you sure you want to delete this folder?")) deleteFolder(contextMenu.targetId); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"><TrashIcon className="w-3.5 h-3.5" /> Delete Folder</button>
+                      </>
+                    );
+                  })()}
+                  {contextMenu.type === 'main' && (
+                    <button onClick={() => { const text = prompt("Enter paragraph content:"); if (text && text.trim()) updateDocState(folders, [...paragraphs, { id: generateId(), folderId: selectedFolderId, text: text.trim(), textBack: '', createdAt: Date.now(), archived: false, studyCount: 0, lastStudied: null }]); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2"><PlusIcon className="w-3.5 h-3.5 text-slate-400" /> Add Paragraph</button>
+                  )}
+                  {contextMenu.type === 'paragraph' && (() => {
+                    const idx = filteredParagraphs.findIndex(p => p.id === contextMenu.targetId);
+                    return (
+                      <>
+                        {idx > 0 && (
+                          <button onClick={() => { moveParagraph(contextMenu.targetId, -1); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2">Move Up ↑</button>
+                        )}
+                        {idx < filteredParagraphs.length - 1 && (
+                          <button onClick={() => { moveParagraph(contextMenu.targetId, 1); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2">Move Down ↓</button>
+                        )}
+                        <div className="border-t border-slate-100 my-1"></div>
+                        <button onClick={() => { const para = paragraphs.find(p => p.id === contextMenu.targetId); if (para) startEditing(para); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2">Edit Paragraph</button>
+                        <button onClick={() => { toggleArchive(contextMenu.targetId); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2">{paragraphs.find(p => p.id === contextMenu.targetId)?.archived ? "Restore" : "Archive"}</button>
+                        <div className="border-t border-slate-100 my-1"></div>
+                        <button onClick={() => { if (confirm("Are you sure you want to delete this paragraph?")) deleteParagraph(contextMenu.targetId); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"><TrashIcon className="w-3.5 h-3.5" /> Delete Paragraph</button>
+                      </>
+                    );
+                  })()}
+                  {contextMenu.type === 'header' && (
+                    <>
+                      <button onClick={() => { switchTab('editor'); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50">Switch to Document Editor</button>
+                      <button onClick={() => { switchTab('readable'); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50">Switch to App Data</button>
+                      <div className="border-t border-slate-100 my-1"></div>
+                      <button onClick={() => { setShowArchived(prev => !prev); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between"><span>Show Archived Items</span>{showArchived && <CheckIcon className="w-3.5 h-3.5 text-blue-500" />}</button>
+                      {currentFolder && (
+                        <>
+                          <div className="border-t border-slate-100 my-1"></div>
+                          <button onClick={() => { changeFolderRating(currentFolder.id, 0); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50">Reset Rating to 0%</button>
+                          <button onClick={() => { changeFolderRating(currentFolder.id, 100); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50">Set Rating to 100%</button>
+                        </>
+                      )}
+                    </>
+                  )}
+                  {contextMenu.type === 'default' && (
+                    <>
+                      <button onClick={() => { const newName = prompt("Enter new folder name:"); if (newName && newName.trim()) { const newId = generateId(); updateDocState([...folders, { id: newId, name: newName.trim(), rating: 0 }], paragraphs); setSelectedFolderId(newId); setLastActiveFolderId(newId); } setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2"><PlusIcon className="w-3.5 h-3.5 text-slate-400" /> New Folder</button>
+                      <div className="border-t border-slate-100 my-1"></div>
+                      <button onClick={() => { undo(); setContextMenu(prev => ({ ...prev, visible: false })); }} disabled={undoStack.length === 0} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50">Undo Action (Ctrl+Z)</button>
+                      <button onClick={() => { redo(); setContextMenu(prev => ({ ...prev, visible: false })); }} disabled={redoStack.length === 0} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50">Redo Action (Ctrl+Y)</button>
+                      <div className="border-t border-slate-100 my-1"></div>
+                      <button onClick={() => { switchTab('editor'); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50">Switch to Document Editor</button>
+                      <button onClick={() => { switchTab('readable'); setContextMenu(prev => ({ ...prev, visible: false })); }} className="w-full text-left px-4 py-2 hover:bg-slate-50">Switch to App Data</button>
+                      <div className="border-t border-slate-100 my-1"></div>
+                      <a href="https://docs.google.com/document/d/1cdXb89j0-RPMXlgnJ2jzhcuV7nFgZgywY0J2DYdD-Xo/edit?tab=t.ffq49l65rq8a#bookmark=id.d6ro8n4zvfyp" target="_blank" rel="noopener noreferrer" className="w-full text-left px-4 py-2 hover:bg-slate-50 block text-blue-600 font-bold" onClick={() => setContextMenu(prev => ({ ...prev, visible: false }))}>Save Data (External Doc)</a>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Stat Details Modal */}
+              {statModal.visible && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-4 md:p-6" onClick={() => setStatModal({ visible: false, title: '', paras: [] })}>
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-[95vw] md:max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-between items-center p-4 md:p-6 border-b border-slate-100">
+                      <h3 className="text-lg md:text-xl font-bold text-slate-800">{statModal.title} ({statModal.paras.length})</h3>
+                      <button onClick={() => setStatModal({ visible: false, title: '', paras: [] })} className="text-slate-400 hover:text-slate-600 p-1">
+                        <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                    <div className="p-4 md:p-6 overflow-y-auto space-y-3 md:space-y-4">
+                      {statModal.paras.length === 0 ? (
+                        <p className="text-slate-500 text-center py-4 text-sm md:text-base">No paragraphs found for this category.</p>
+                      ) : (
+                        statModal.paras.map(p => (
+                          <div key={p.id} onClick={() => {
+                            setStatModal({ visible: false, title: '', paras: [] });
+                            setIsMobileMenuOpen(false);
+                            setSelectedFolderId(p.folderId);
+                            setActiveTab('editor');
+                            setTimeout(() => setHighlightParaId(p.id), 50);
+                          }} className="cursor-pointer p-3 md:p-4 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors">
+                            <div className="text-[10px] md:text-xs text-indigo-600 font-semibold mb-1 md:mb-2">{folders.find(f => f.id === p.folderId)?.name}</div>
+                            <div className="text-xs md:text-sm text-slate-700 line-clamp-3" dangerouslySetInnerHTML={{ __html: p.text }} />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
